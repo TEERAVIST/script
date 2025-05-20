@@ -140,12 +140,12 @@ if [[ "$POSITIONAL_REMOTE" =~ ^toto\/(.+)$ ]]; then
   REPO_NAME="${BASH_REMATCH[1]}"
   REMOTE_URL="git@github-teeravist:TEERAVIST/${REPO_NAME}.git"
   git config user.name "Teeravist"
-  git config user.email "toto@example.com"
+  git config user.email "poomisi0841824189@gmail.com"
 elif [[ "$POSITIONAL_REMOTE" =~ ^bomi\/(.+)$ ]]; then
   REPO_NAME="${BASH_REMATCH[1]}"
   REMOTE_URL="git@github-Bhornpat:Bhornpat/${REPO_NAME}.git"
   git config user.name "Bhornpat"
-  git config user.email "bomi@example.com"
+  git config user.email "thebowiiz2543@gmail.com"
 fi
 
 # === Set or update remote ===
