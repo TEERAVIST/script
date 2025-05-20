@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# git-push-helper.sh — Smart Git commit/push with auto-identity, smart remote, and CLI sugar
-
 set -e
 
 # === Config ===
@@ -9,7 +7,7 @@ ADD_PATHS=()
 REMOTE="origin"
 BRANCH=""
 COMMIT_MSG=""
-POSITIONAL_REMOTE=""
+REMOTE_SPEC=""
 AUTO_CONFIRM=false
 
 # === Colors ===
@@ -23,9 +21,7 @@ NC='\e[0m'
 print_banner() {
 echo -e "${CYAN}"
 cat << "EOF"
-     /-----------\   @
-    /             \  @
-   /               \ @
+   /               \
   |   .---------.   |@
   '---' .-----. '---'@
     .' /6 5_4 3\ '.  @
@@ -45,19 +41,19 @@ echo -e "${NC}"
 # === Help ===
 show_help() {
   echo -e "${GREEN}Usage:${NC}"
-  echo "  $(basename "$0") -m \"<message>\" [toto/<repo> | bomi/<repo>] [-p <paths...>] [-r <remote>] [-b <branch>] [--yes]"
+  echo "  $(basename "$0") -m \"<message>\" <identity>/<owner>/<repo> [-p <paths...>] [-r <remote>] [-b <branch>] [--yes]"
   echo
   echo -e "${GREEN}Options:${NC}"
-  echo "  -m \"<message>\"     Commit message (REQUIRED)"
-  echo "  -p <paths...>      Paths to add (default: .)"
-  echo "  -r <remote>        Remote name (default: origin)"
-  echo "  -b <branch>        Branch name (default: current Git branch)"
-  echo "  --yes              Auto-confirm push without prompt"
-  echo "  -h, --help         Show help"
+  echo "  -m \"<message>\"       Commit message (REQUIRED)"
+  echo "  -p <paths...>        Paths to add (default: .)"
+  echo "  -r <remote>          Remote name (default: origin)"
+  echo "  -b <branch>          Branch name (default: current Git branch)"
+  echo "  --yes                Auto-confirm push without prompt"
+  echo "  -h, --help           Show help"
   echo
-  echo -e "${GREEN}Examples:${NC}"
-  echo "  ./$(basename "$0") -m \"Fix bug\" toto/my-repo"
-  echo "  ./$(basename "$0") -m \"Deploy\" --yes bomi/website"
+  echo -e "${GREEN}Example:${NC}"
+  echo "  ./git-push-helper.sh -m \"Update\" toto/TEERAVIST/script"
+  echo "  ./git-push-helper.sh -m \"Deploy\" --yes bomi/Bhornpat/diary"
 }
 
 # === Arg Parsing ===
@@ -92,10 +88,10 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      if [[ "$1" =~ ^(toto|bomi)\/[a-zA-Z0-9._-]+$ ]]; then
-        POSITIONAL_REMOTE="$1"
+      if [[ "$1" =~ ^(toto|bomi)\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$ ]]; then
+        REMOTE_SPEC="$1"
       else
-        echo -e "${RED}❌ Unknown argument or path: $1${NC}"
+        echo -e "${RED}❌ Invalid remote format: $1${NC}"
         show_help
         exit 1
       fi
@@ -104,7 +100,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# === Start ===
 print_banner
 
 # === Validate commit message ===
@@ -114,41 +109,19 @@ if [[ -z "$COMMIT_MSG" ]]; then
   exit 1
 fi
 
-# === Validate positional remote shortcut ===
-if [[ -z "$POSITIONAL_REMOTE" ]]; then
+# === Validate remote spec ===
+if [[ -z "$REMOTE_SPEC" ]]; then
   echo -e "${RED}❌ Remote not specified.${NC}"
-  echo -e "${YELLOW}➡️ Please run with a remote shortcut like:${NC}"
-  echo -e "   ${CYAN}./git-push-helper -m \"message\" toto/my-repo${NC}"
-  echo -e "   ${CYAN}./git-push-helper -m \"message\" bomi/portfolio${NC}"
+  echo -e "${YELLOW}➡️ Use: ${CYAN}<identity>/<owner>/<repo>${NC}"
   exit 1
 fi
 
-# === Default path ===
-if [[ ${#ADD_PATHS[@]} -eq 0 ]]; then
-  ADD_PATHS+=(".")
-fi
+# === Parse <identity>/<owner>/<repo> ===
+IDENTITY=$(echo "$REMOTE_SPEC" | cut -d/ -f1)
+OWNER=$(echo "$REMOTE_SPEC" | cut -d/ -f2)
+REPO=$(echo "$REMOTE_SPEC" | cut -d/ -f3)
 
-# === Auto-detect branch ===
-if [[ -z "$BRANCH" ]]; then
-  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-  if [[ -z "$BRANCH" ]]; then
-    echo -e "${RED}❌ Could not detect current Git branch. Use -b option.${NC}"
-    exit 1
-  fi
-fi
-
-# === Convert remote shortcut and auto-set author ===
-if [[ "$POSITIONAL_REMOTE" =~ ^toto\/(.+)$ ]]; then
-  REPO_NAME="${BASH_REMATCH[1]}"
-  REMOTE_URL="git@github-teeravist:TEERAVIST/${REPO_NAME}.git"
-  git config user.name "Teeravist"
-  git config user.email "poomisi0841824189@gmail.com"
-elif [[ "$POSITIONAL_REMOTE" =~ ^bomi\/(.+)$ ]]; then
-  REPO_NAME="${BASH_REMATCH[1]}"
-  REMOTE_URL="git@github-Bhornpat:Bhornpat/${REPO_NAME}.git"
-  git config user.name "Bhornpat"
-  git config user.email "thebowiiz2543@gmail.com"
-fi
+REMOTE_URL="git@github-${OWNER}:$OWNER/$REPO.git"
 
 # === Set or update remote ===
 if git remote get-url "$REMOTE" &>/dev/null; then
@@ -159,6 +132,34 @@ else
   git remote add "$REMOTE" "$REMOTE_URL"
 fi
 
+# === Auto-set Git identity if identity matches owner ===
+if [[ "$IDENTITY" == "$OWNER" ]]; then
+  if [[ "$IDENTITY" == "toto" ]]; then
+    git config user.name "Teeravist"
+    git config user.email "toto@example.com"
+  elif [[ "$IDENTITY" == "bomi" ]]; then
+    git config user.name "Bhornpat"
+    git config user.email "bomi@example.com"
+  fi
+else
+  echo -e "${YELLOW}⚠️ Skipping author override because identity ≠ owner.${NC}"
+  echo -e "${CYAN}   Use your own SSH key + Git identity for pushing to others' repos.${NC}"
+fi
+
+# === Auto-detect branch ===
+if [[ -z "$BRANCH" ]]; then
+  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [[ -z "$BRANCH" ]]; then
+    echo -e "${RED}❌ Could not detect Git branch.${NC}"
+    exit 1
+  fi
+fi
+
+# === Default path ===
+if [[ ${#ADD_PATHS[@]} -eq 0 ]]; then
+  ADD_PATHS+=(".")
+fi
+
 # === Stage files ===
 echo -e "${YELLOW}➕ Staging files...${NC}"
 for path in "${ADD_PATHS[@]}"; do
@@ -166,14 +167,14 @@ for path in "${ADD_PATHS[@]}"; do
   git add "$path"
 done
 
-# === Commit or reuse last ===
+# === Commit if needed ===
 if git diff --cached --quiet; then
   LAST_COMMIT=$(git log -1 --pretty=%B 2>/dev/null || echo "")
   if [[ "$LAST_COMMIT" == "$COMMIT_MSG" ]]; then
     echo -e "${YELLOW}⚠️ No changes staged. Last commit matches: '${COMMIT_MSG}'${NC}"
     echo -e "${GREEN}➡️ Proceeding to push anyway...${NC}"
   else
-    echo -e "${RED}⚠️ No changes staged and no matching commit found. Nothing to do.${NC}"
+    echo -e "${RED}⚠️ Nothing to commit and message is new. Aborting.${NC}"
     exit 1
   fi
 else
