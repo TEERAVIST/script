@@ -47,5 +47,38 @@ mv git-push-helper push
 make push command for global command (user)
 ```bash
 sudo mv push /usr/local/bin
+```
 
+now, you are ready to use it 
+```bash
+     /-----------\   @
+    /             \  @
+   /               \ @
+  |   .---------.   |@
+  '---' .-----. '---'@
+    .' /6 5_4 3\ '.  @
+    | |7 /...\ 2| |  @
+    | |8 \___/ 1| |  @
+    |  \_9_0_)\/  |  @@
+ /==|_____________|@@@@
+ H-------------------@@
+ H   )  ||   ||  (   @@
+ H  /   ||   ||   \   @
+ H |----''---''----|
+=/ |_______________|
+
+Usage:
+  push -m "<message>" [toto/<repo> | bomi/<repo>] [-p <paths...>] [-r <remote>] [-b <branch>] [--yes]
+
+Options:
+  -m "<message>"     Commit message (REQUIRED)
+  -p <paths...>      Paths to add (default: .)
+  -r <remote>        Remote name (default: origin)
+  -b <branch>        Branch name (default: current Git branch)
+  --yes              Auto-confirm push without prompt
+  -h, --help         Show help
+
+Examples:
+  ./push -m "Fix bug" toto/my-repo
+  ./push -m "Deploy" --yes bomi/website
 ```
