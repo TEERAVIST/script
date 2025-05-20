@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# git-push-helper.sh — A stylish Git helper for add, commit, and push with shortcut remotes.
+# git-push-helper.sh — A stylish Git helper for add, commit, and push with smart remote & flags.
 
 set -e
 
@@ -10,6 +10,7 @@ REMOTE="origin"
 BRANCH=""
 COMMIT_MSG=""
 POSITIONAL_REMOTE=""
+AUTO_CONFIRM=false
 
 # === Colors ===
 GREEN='\e[0;32m'
@@ -42,18 +43,19 @@ echo -e "${NC}"
 # === Help ===
 show_help() {
   echo -e "${GREEN}Usage:${NC}"
-  echo "  $(basename "$0") -m \"<message>\" [toto/<repo> | bomi/<repo>] [-p <paths...>] [-r <remote>] [-b <branch>]"
+  echo "  $(basename "$0") -m \"<message>\" [toto/<repo> | bomi/<repo>] [-p <paths...>] [-r <remote>] [-b <branch>] [--yes]"
   echo
   echo -e "${GREEN}Options:${NC}"
   echo "  -m \"<message>\"     Commit message (REQUIRED)"
   echo "  -p <paths...>      Paths to add (default: .)"
   echo "  -r <remote>        Remote name (default: origin)"
   echo "  -b <branch>        Branch name (default: current Git branch)"
+  echo "  --yes              Auto-confirm push without prompt"
   echo "  -h, --help         Show help"
   echo
   echo -e "${GREEN}Examples:${NC}"
-  echo "  ./$(basename "$0") -m \"Update UI\" toto/my-repo"
-  echo "  ./$(basename "$0") -m \"Fix bug\" -p src/ -b dev bomi/personal-diary"
+  echo "  ./$(basename "$0") -m \"Fix UI\" toto/my-repo"
+  echo "  ./$(basename "$0") -m \"Init\" --yes bomi/secret-proj"
 }
 
 # === Arg Parsing ===
@@ -78,6 +80,9 @@ while [[ $# -gt 0 ]]; do
     -b)
       shift
       BRANCH="$1"
+      ;;
+    --yes)
+      AUTO_CONFIRM=true
       ;;
     -h|--help)
       print_banner
@@ -150,21 +155,32 @@ done
 
 # === Check staged ===
 if git diff --cached --quiet; then
-  echo -e "${RED}⚠️ No changes staged. Nothing to commit.${NC}"
-  exit 1
+  LAST_COMMIT=$(git log -1 --pretty=%B 2>/dev/null || echo "")
+
+  if [[ "$LAST_COMMIT" == "$COMMIT_MSG" ]]; then
+    echo -e "${YELLOW}⚠️ No changes staged. Last commit matches: '${COMMIT_MSG}'${NC}"
+    echo -e "${GREEN}➡️ Proceeding to push anyway...${NC}"
+  else
+    echo -e "${RED}⚠️ No changes staged and no matching commit found. Nothing to do.${NC}"
+    exit 1
+  fi
+else
+  echo -e "${YELLOW}📝 Committing: ${CYAN}$COMMIT_MSG${NC}"
+  git commit -m "$COMMIT_MSG"
 fi
 
-# === Commit ===
-echo -e "${YELLOW}📝 Committing: ${CYAN}$COMMIT_MSG${NC}"
-git commit -m "$COMMIT_MSG"
-
-# === Push confirmation ===
+# === Push ===
 echo -e "${YELLOW}🚀 Ready to push to ${CYAN}${REMOTE}/${BRANCH}${NC}"
-read -p "Push now? [y/N]: " CONFIRM
-if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+if $AUTO_CONFIRM; then
   git push "$REMOTE" "$BRANCH"
   echo -e "${GREEN}✅ Push complete!${NC}"
 else
-  echo -e "${YELLOW}🚫 Push canceled.${NC}"
+  read -p "Push now? [y/N]: " CONFIRM
+  if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+    git push "$REMOTE" "$BRANCH"
+    echo -e "${GREEN}✅ Push complete!${NC}"
+  else
+    echo -e "${YELLOW}🚫 Push canceled.${NC}"
+  fi
 fi
 
