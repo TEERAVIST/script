@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# git-push-helper.sh — A stylish Git helper for add, commit, and push with shortcut remotes.
+
+set -e
+
+# === Config ===
+ADD_PATHS=()
+REMOTE="origin"
+BRANCH=""
+COMMIT_MSG=""
+POSITIONAL_REMOTE=""
+
+# === Colors ===
+GREEN='\e[0;32m'
+RED='\e[0;31m'
+YELLOW='\e[1;33m'
+CYAN='\e[1;36m'
+NC='\e[0m' # No color
+
+# === Banner ===
+print_banner() {
+echo -e "${CYAN}"
+cat << "EOF"
+   /               \
+  |   .---------.   |@
+  '---' .-----. '---'@
+    .' /6 5_4 3\ '.  @
+    | |7 /...\ 2| |  @
+    | |8 \___/ 1| |  @
+    |  \_9_0_)\/  |  @@
+ /==|_____________|@@@@
+ H-------------------@@
+ H   )  ||   ||  (   @@
+ H  /   ||   ||   \   @
+ H |----''---''----|
+=/ |_______________|
+EOF
+echo -e "${NC}"
+}
+
+# === Help ===
+show_help() {
+  echo -e "${GREEN}Usage:${NC}"
+  echo "  $(basename "$0") -m \"<message>\" [toto/<repo> | bomi/<repo>] [-p <paths...>] [-r <remote>] [-b <branch>]"
+  echo
+  echo -e "${GREEN}Options:${NC}"
+  echo "  -m \"<message>\"     Commit message (REQUIRED)"
+  echo "  -p <paths...>      Paths to add (default: .)"
+  echo "  -r <remote>        Remote name (default: origin)"
+  echo "  -b <branch>        Branch name (default: current Git branch)"
+  echo "  -h, --help         Show help"
+  echo
+  echo -e "${GREEN}Examples:${NC}"
+  echo "  ./$(basename "$0") -m \"Update UI\" toto/my-repo"
+  echo "  ./$(basename "$0") -m \"Fix bug\" -p src/ -b dev bomi/personal-diary"
+}
+
+# === Arg Parsing ===
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -m)
+      shift
+      COMMIT_MSG="$1"
+      ;;
+    -p)
+      shift
+      while [[ "$1" && "$1" != -* ]]; do
+        ADD_PATHS+=("$1")
+        shift
+      done
+      continue
+      ;;
+    -r)
+      shift
+      REMOTE="$1"
+      ;;
+    -b)
+      shift
+      BRANCH="$1"
+      ;;
+    -h|--help)
+      print_banner
+      show_help
+      exit 0
+      ;;
+    *)
+      # Accepts positional shortcut like "toto/repo-name"
+      if [[ "$1" =~ ^(toto|bomi)\/[a-zA-Z0-9._-]+$ ]]; then
+        POSITIONAL_REMOTE="$1"
+      else
+        echo -e "${RED}❌ Unknown argument or path: $1${NC}"
+        show_help
+        exit 1
+      fi
+      ;;
+  esac
+  shift
+done
+
+# === Start ===
+print_banner
+
+# === Validate commit message ===
+if [[ -z "$COMMIT_MSG" ]]; then
+  echo -e "${RED}❌ Commit message (-m) is required.${NC}"
+  show_help
+  exit 1
+fi
+
+# === Default path ===
+if [[ ${#ADD_PATHS[@]} -eq 0 ]]; then
+  ADD_PATHS+=(".")
+fi
+
+# === Auto-detect branch ===
+if [[ -z "$BRANCH" ]]; then
+  BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  if [[ -z "$BRANCH" ]]; then
+    echo -e "${RED}❌ Could not detect current Git branch. Use -b option.${NC}"
+    exit 1
+  fi
+fi
+
+# === Convert shorthand to remote URL ===
+if [[ -n "$POSITIONAL_REMOTE" ]]; then
+  if [[ "$POSITIONAL_REMOTE" =~ ^toto\/(.+)$ ]]; then
+    REPO_NAME="${BASH_REMATCH[1]}"
+    REMOTE_URL="git@github-teeravist:TEERAVIST/${REPO_NAME}.git"
+  elif [[ "$POSITIONAL_REMOTE" =~ ^bomi\/(.+)$ ]]; then
+    REPO_NAME="${BASH_REMATCH[1]}"
+    REMOTE_URL="git@github-Bhornpat:Bhornpat/${REPO_NAME}.git"
+  fi
+
+  if git remote get-url "$REMOTE" &>/dev/null; then
+    echo -e "${YELLOW}🔁 Updating remote '$REMOTE' URL to:${NC} $REMOTE_URL"
+    git remote set-url "$REMOTE" "$REMOTE_URL"
+  else
+    echo -e "${YELLOW}➕ Adding remote '$REMOTE' with URL:${NC} $REMOTE_URL"
+    git remote add "$REMOTE" "$REMOTE_URL"
+  fi
+fi
+
+# === Add files ===
+echo -e "${YELLOW}➕ Staging files...${NC}"
+for path in "${ADD_PATHS[@]}"; do
+  echo "   • git add $path"
+  git add "$path"
+done
+
+# === Check staged ===
+if git diff --cached --quiet; then
+  echo -e "${RED}⚠️ No changes staged. Nothing to commit.${NC}"
+  exit 1
+fi
+
+# === Commit ===
+echo -e "${YELLOW}📝 Committing: ${CYAN}$COMMIT_MSG${NC}"
+git commit -m "$COMMIT_MSG"
+
+# === Push confirmation ===
+echo -e "${YELLOW}🚀 Ready to push to ${CYAN}${REMOTE}/${BRANCH}${NC}"
+read -p "Push now? [y/N]: " CONFIRM
+if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+  git push "$REMOTE" "$BRANCH"
+  echo -e "${GREEN}✅ Push complete!${NC}"
+else
+  echo -e "${YELLOW}🚫 Push canceled.${NC}"
+fi
+
