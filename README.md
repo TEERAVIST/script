@@ -1,5 +1,6 @@
 # scripts
 
+Hi
 ### git-push-helper used for push files simplely
 
 
