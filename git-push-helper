@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# git-push-helper.sh — A stylish Git helper for commit + smart remote logic
+# git-push-helper.sh — Smart Git commit/push with auto-identity, smart remote, and CLI sugar
 
 set -e
 
@@ -55,7 +55,7 @@ show_help() {
   echo
   echo -e "${GREEN}Examples:${NC}"
   echo "  ./$(basename "$0") -m \"Fix bug\" toto/my-repo"
-  echo "  ./$(basename "$0") -m \"Initial\" --yes bomi/new-app"
+  echo "  ./$(basename "$0") -m \"Deploy\" --yes bomi/website"
 }
 
 # === Arg Parsing ===
@@ -90,7 +90,6 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     *)
-      # Accepts positional shortcut like "toto/repo"
       if [[ "$1" =~ ^(toto|bomi)\/[a-zA-Z0-9._-]+$ ]]; then
         POSITIONAL_REMOTE="$1"
       else
@@ -136,16 +135,20 @@ if [[ -z "$BRANCH" ]]; then
   fi
 fi
 
-# === Convert remote shortcut to URL ===
+# === Convert remote shortcut and auto-set author ===
 if [[ "$POSITIONAL_REMOTE" =~ ^toto\/(.+)$ ]]; then
   REPO_NAME="${BASH_REMATCH[1]}"
   REMOTE_URL="git@github-teeravist:TEERAVIST/${REPO_NAME}.git"
+  git config user.name "Teeravist"
+  git config user.email "toto@example.com"
 elif [[ "$POSITIONAL_REMOTE" =~ ^bomi\/(.+)$ ]]; then
   REPO_NAME="${BASH_REMATCH[1]}"
   REMOTE_URL="git@github-Bhornpat:Bhornpat/${REPO_NAME}.git"
+  git config user.name "Bhornpat"
+  git config user.email "bomi@example.com"
 fi
 
-# === Add or update remote ===
+# === Set or update remote ===
 if git remote get-url "$REMOTE" &>/dev/null; then
   echo -e "${YELLOW}🔁 Updating remote '$REMOTE' URL to:${NC} $REMOTE_URL"
   git remote set-url "$REMOTE" "$REMOTE_URL"
@@ -154,14 +157,14 @@ else
   git remote add "$REMOTE" "$REMOTE_URL"
 fi
 
-# === Add files ===
+# === Stage files ===
 echo -e "${YELLOW}➕ Staging files...${NC}"
 for path in "${ADD_PATHS[@]}"; do
   echo "   • git add $path"
   git add "$path"
 done
 
-# === Check staged ===
+# === Commit or reuse last ===
 if git diff --cached --quiet; then
   LAST_COMMIT=$(git log -1 --pretty=%B 2>/dev/null || echo "")
   if [[ "$LAST_COMMIT" == "$COMMIT_MSG" ]]; then
