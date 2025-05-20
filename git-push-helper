@@ -2,7 +2,6 @@
 
 set -e
 
-# === Config ===
 ADD_PATHS=()
 REMOTE="origin"
 BRANCH=""
@@ -54,6 +53,26 @@ show_help() {
   echo -e "${GREEN}Example:${NC}"
   echo "  ./git-push-helper.sh -m \"Update\" toto/TEERAVIST/script"
   echo "  ./git-push-helper.sh -m \"Deploy\" --yes bomi/Bhornpat/diary"
+}
+
+# === Detect SSH alias from ~/.ssh/config ===
+find_ssh_alias_for_owner() {
+  local owner="$1"
+  local alias
+  alias=$(awk -v IGNORECASE=1 '
+    $1 == "Host" && $2 ~ /github-/ {
+      found = $2;
+      next
+    }
+    $1 == "HostName" && $2 == "github.com" && found {
+      print found;
+      exit
+    }' ~/.ssh/config | grep -i "github-$owner" || true)
+  if [[ -n "$alias" ]]; then
+    echo "$alias"
+  else
+    echo "github.com"
+  fi
 }
 
 # === Arg Parsing ===
@@ -116,12 +135,14 @@ if [[ -z "$REMOTE_SPEC" ]]; then
   exit 1
 fi
 
-# === Parse <identity>/<owner>/<repo> ===
+# === Parse identity/owner/repo ===
 IDENTITY=$(echo "$REMOTE_SPEC" | cut -d/ -f1)
 OWNER=$(echo "$REMOTE_SPEC" | cut -d/ -f2)
 REPO=$(echo "$REMOTE_SPEC" | cut -d/ -f3)
 
-REMOTE_URL="git@github-${OWNER}:$OWNER/$REPO.git"
+# === Resolve SSH alias
+SSH_ALIAS=$(find_ssh_alias_for_owner "$OWNER")
+REMOTE_URL="git@$SSH_ALIAS:$OWNER/$REPO.git"
 
 # === Set or update remote ===
 if git remote get-url "$REMOTE" &>/dev/null; then
@@ -132,7 +153,7 @@ else
   git remote add "$REMOTE" "$REMOTE_URL"
 fi
 
-# === Auto-set Git identity if identity matches owner ===
+# === Author override only if identity == owner
 if [[ "$IDENTITY" == "$OWNER" ]]; then
   if [[ "$IDENTITY" == "toto" ]]; then
     git config user.name "Teeravist"
@@ -143,38 +164,38 @@ if [[ "$IDENTITY" == "$OWNER" ]]; then
   fi
 else
   echo -e "${YELLOW}⚠️ Skipping author override because identity ≠ owner.${NC}"
-  echo -e "${CYAN}   Use your own SSH key + Git identity for pushing to others' repos.${NC}"
+  echo -e "${CYAN}   Use your own SSH key + Git identity to push to other's repos.${NC}"
 fi
 
-# === Auto-detect branch ===
+# === Auto-detect branch
 if [[ -z "$BRANCH" ]]; then
   BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
   if [[ -z "$BRANCH" ]]; then
-    echo -e "${RED}❌ Could not detect Git branch.${NC}"
+    echo -e "${RED}❌ Cannot detect Git branch.${NC}"
     exit 1
   fi
 fi
 
-# === Default path ===
+# === Default paths
 if [[ ${#ADD_PATHS[@]} -eq 0 ]]; then
   ADD_PATHS+=(".")
 fi
 
-# === Stage files ===
+# === Stage files
 echo -e "${YELLOW}➕ Staging files...${NC}"
 for path in "${ADD_PATHS[@]}"; do
   echo "   • git add $path"
   git add "$path"
 done
 
-# === Commit if needed ===
+# === Commit if needed
 if git diff --cached --quiet; then
   LAST_COMMIT=$(git log -1 --pretty=%B 2>/dev/null || echo "")
   if [[ "$LAST_COMMIT" == "$COMMIT_MSG" ]]; then
     echo -e "${YELLOW}⚠️ No changes staged. Last commit matches: '${COMMIT_MSG}'${NC}"
     echo -e "${GREEN}➡️ Proceeding to push anyway...${NC}"
   else
-    echo -e "${RED}⚠️ Nothing to commit and message is new. Aborting.${NC}"
+    echo -e "${RED}⚠️ Nothing to commit. Commit message is new, but no changes staged.${NC}"
     exit 1
   fi
 else
@@ -182,7 +203,7 @@ else
   git commit -m "$COMMIT_MSG"
 fi
 
-# === Push ===
+# === Push
 echo -e "${YELLOW}🚀 Ready to push to ${CYAN}${REMOTE}/${BRANCH}${NC}"
 if $AUTO_CONFIRM; then
   git push "$REMOTE" "$BRANCH"
