@@ -1,4 +1,4 @@
-# script
+# scripts
 
 convert script to elf
 ```bash
